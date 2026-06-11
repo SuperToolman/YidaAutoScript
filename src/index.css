@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 
+  自定义 Preflight：
+  由于关闭了 Tailwind 的全局 preflight 以防污染宜搭原生样式，
+  我们需要为所有使用了 x- 前缀的 Tailwind 元素手动补充基础的盒模型和边框重置样式，
+  否则 borders、padding、width 的计算都会失效（导致所有样式看起来都不生效）。
+*/
+[class*="x-"] {
+  box-sizing: border-box;
+  border-width: 0;
+  border-style: solid;
+  border-color: #e5e7eb; /* Tailwind 默认的边框颜色 */
+}
+
+[class*="x-"]::before,
+[class*="x-"]::after {
+  box-sizing: border-box;
+  border-width: 0;
+  border-style: solid;
+  border-color: #e5e7eb;
+}
