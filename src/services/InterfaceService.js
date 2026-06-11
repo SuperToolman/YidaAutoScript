@@ -99,32 +99,32 @@ export default class InterfaceService {
     }
 
     // 获取表单自定义按钮
-    async getButtonConfigs(targetAppId,targetFormUuid){
-        const csrf_token = this.getCsrfToken(),
+    async getButtonConfigs(targetAppId, targetFormUuid) {
+        const csrf_token = this.getCsrfToken();
         const requestUrl = `${window.location.origin}/dingtalk/web/${targetAppId}/query/customButtonManage/list.json?_api=nattyFetch&_mock=false&formUuid=${targetFormUuid}&_csrf_token=${csrf_token}&_stamp=${Date.now()}`;
         return await Utils.fetchJson(requestUrl, { method: 'GET', headers: { 'Accept': 'application/json, text/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'include' });
     }
 
     // 保存表单自定义按钮
-    async saveButtonConfig(targetAppId,targetFormUuid){
+    async saveButtonConfig(targetAppId, targetFormUuid, buttonConfig = null) {
         const requestUrl = `${window.location.origin}/dingtalk/web/${targetAppId}/query/customButtonManage/saveButtonConfig.json?_api=nattyFetch&_mock=false&_stamp=${Date.now()}`
         const csrfToken = this.getCsrfToken();
-        
+
         const formData = new FormData();
-        if (csrfToken) formData.append('_csrf_token', csrfToken);
+        formData.append('_csrf_token', csrfToken);
         formData.append('formUuid', targetFormUuid);
-        formData.append('name', JSON.stringify({"en_US":"Button","zh_CN":"文件上传","type":"i18n"}));
-        formData.append('actionType','');
-        formData.append('icon','');
-        formData.append('permissionConfig','');
-        formData.append('actionConfig',''); // 按钮事件
-        formData.append('tableViewUuids','');
-        formData.append('detailld',''); // 详细说明
-        formData.append('relationId',targetFormUuid);
+        formData.append('name', JSON.stringify(buttonConfig.name));
+        formData.append('actionType', buttonConfig.actionType);
+        formData.append('icon', JSON.stringify(buttonConfig.icon));
+        formData.append('permissionConfig', JSON.stringify(buttonConfig.permissionConfig));
+        formData.append('actionConfig', JSON.stringify(buttonConfig.actionConfig));
+        formData.append('tableViewUuids', buttonConfig.tableViewUuids);
+        formData.append('detailId', buttonConfig.detailId);
+        formData.append('relationId', buttonConfig.relationId);
 
         return await Utils.fetchJson(requestUrl, {
             method: 'POST',
-            headers: {'Accept': 'application/json, text/json','X-Requested-With': 'XMLHttpRequest','_csrf_token': csrfToken},
+            headers: { 'Accept': 'application/json, text/json', 'X-Requested-With': 'XMLHttpRequest', '_csrf_token': csrfToken },
             credentials: 'include',
             body: formData
         });
@@ -305,7 +305,7 @@ export default class InterfaceService {
         // console.log("getListFieldInApp?, result)
         return result
     }
-    
+
     // #endregion
 
     // #region 页面上下文与鉴权
@@ -368,7 +368,7 @@ export default class InterfaceService {
             _mock: 'false',
             _csrf_token: csrfToken,
             _locale_time_zone_offset: String(new Date().getTimezoneOffset() * -60000),
-            type: '1',
+            type: '1,2,3,4,5,6',
             key: '',
             appType: appId,
             formUuid: formUuid,
@@ -394,48 +394,63 @@ export default class InterfaceService {
                 if (!res || !res.content || !res.content.data) {
                     break;
                 }
-                const groups = res.content.data;
-                groups.forEach(group => {
-                    const flowList = Array.isArray(group.flowList) ? group.flowList : [];
-                    allFlows = allFlows.concat(flowList);
-                });
-                hasMore = groups.length === pageSize;
+                const items = res.content.data;
+                if (!Array.isArray(items) || items.length === 0) break;
+
+                // 兼容两种返回结构：分组结构（审批类）和平铺结构（集成自动化）
+                if (items[0].processCode !== undefined) {
+                    allFlows = allFlows.concat(items);
+                } else {
+                    items.forEach(group => {
+                        const flowList = Array.isArray(group.flowList) ? group.flowList : [];
+                        allFlows = allFlows.concat(flowList);
+                    });
+                }
+                hasMore = items.length === pageSize;
                 pageIndex++;
             }
 
             return allFlows;
         } catch (err) {
-            console.error('[ProcessService] getAllFlows error:', err);
+            console.error('[InterfaceService] getAllFlows error:', err);
             throw err;
         }
     }
 
     async getAllFlowsByFormUuid(appIdParam, formUuid) {
-    if (!formUuid) return [];
+        if (!formUuid) return [];
 
-    try {
-        const appId = appIdParam || this.getAppId();
-        const pageSize = 50;
-        let pageIndex = 1;
-        let allFlows = [];
-        let hasMore = true;
+        try {
+            const appId = appIdParam || this.getAppId();
+            const pageSize = 50;
+            let pageIndex = 1;
+            let allFlows = [];
+            let hasMore = true;
 
-        while (hasMore) {
-            const res = await this.getListFlow(appId, pageIndex, pageSize, formUuid);
-            const groups = Array.isArray(res?.content?.data) ? res.content.data : [];
-            const pageFlows = groups.flatMap(group => Array.isArray(group.flowList) ? group.flowList : []);
+            while (hasMore) {
+                const res = await this.getListFlow(appId, pageIndex, pageSize, formUuid);
+                const items = Array.isArray(res?.content?.data) ? res.content.data : [];
+                if (!items.length) break;
 
-            allFlows = allFlows.concat(pageFlows);
-            hasMore = pageFlows.length === pageSize;
-            pageIndex++;
+                // 兼容两种返回结构：分组结构（审批类）和平铺结构（集成自动化）
+                let pageFlows;
+                if (items[0].processCode !== undefined) {
+                    pageFlows = items;
+                } else {
+                    pageFlows = items.flatMap(group => Array.isArray(group.flowList) ? group.flowList : []);
+                }
+
+                allFlows = allFlows.concat(pageFlows);
+                hasMore = pageFlows.length === pageSize;
+                pageIndex++;
+            }
+
+            return allFlows;
+        } catch (err) {
+            console.error('[InterfaceService] getAllFlowsByFormUuid error:', err);
+            throw err;
         }
-
-        return allFlows;
-    } catch (err) {
-        console.error('[InterfaceService] getAllFlowsByFormUuid error:', err);
-        throw err;
     }
-}
 
     async getProcess(processCodeParam, appIdParam, isLogic = true) {
         const appId = appIdParam || this.getAppId();
@@ -444,7 +459,7 @@ export default class InterfaceService {
         return await Utils.fetchJson(requestUrl, { method: 'GET', headers: { 'Accept': 'application/json, text/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'include' });
     }
 
-    async createLogicflow(name, formUuidParam) {
+    async createLogicflow(name, formUuidParam, eventType = 1) {
         const appId = this.getAppId();
         if (!appId) throw new Error("无法获取 appId，请确认当前处于宜搭环境");
 
@@ -454,7 +469,7 @@ export default class InterfaceService {
         if (csrfToken) formData.append('_csrf_token', csrfToken);
         formData.append('_locale_time_zone_offset', String(new Date().getTimezoneOffset() * -60000));
         formData.append('name', String(name || ''));
-        formData.append('type', '1');
+        formData.append('type', String(eventType));
         formData.append('formUuid', String(formUuidParam || ''));
         return await Utils.fetchJson(requestUrl, {
             method: 'POST',

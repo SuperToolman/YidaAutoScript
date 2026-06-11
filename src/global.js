@@ -1,4 +1,8 @@
 
+/**
+ * global is 
+ */
+
 const global = {
     info: {
         appStructure: [], // 应用完整的架构

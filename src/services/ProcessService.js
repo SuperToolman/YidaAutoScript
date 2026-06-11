@@ -164,8 +164,22 @@ export default class ProcessService {
             // 检查是否是官方运行时 Payload (含有 nodes 数组)
             const isRuntimePayload = payload && Array.isArray(payload.nodes) && payload.props;
 
-            // 集成自动化统一使用 isLogic='true'（区分于页面设计器的 isLogic='false'）
-            const isLogicFlag = 'true';
+            // 根据 eventType 确定 createLogicflow 的 type 参数
+            const sourceEventType = (rawData?.__migrationMeta?.source?.eventType != null)
+                ? Number(rawData.__migrationMeta.source.eventType)
+                : null;
+            const flowCreateType = sourceEventType || 1;
+
+            // 根据 payload 结构判断 isLogic
+            // - CanvasEngine 中 StartNode 有 props.start → 审批流程 → isLogic='false'
+            // - 其他 → 集成自动化 → isLogic='true'
+            let isLogicFlag = 'true';
+            if (payload?.schema?.componentName === 'CanvasEngine') {
+                const children = payload.schema.children || [];
+                if (children.some(n => n?.componentName === 'StartNode' && n?.props?.start)) {
+                    isLogicFlag = 'false';
+                }
+            }
 
             let formUuidParam = '';
 
@@ -309,7 +323,7 @@ export default class ProcessService {
             if (processName.length > 30) {
                 processName = processName.substring(0, 30);
             }
-            const res = await global.services.createLogicflow(processName, formUuidParam);
+            const res = await global.services.createLogicflow(processName, formUuidParam, flowCreateType);
             if (!res || !res.content || !res.content.processCode) {
                 throw new Error(`创建流程失败: ${res ? (res.errorMsg || res.message) : '未知错误'}`);
             }
@@ -883,12 +897,21 @@ export default class ProcessService {
                 if (!res || !res.content || !res.content.data) {
                     break;
                 }
-                const groups = res.content.data;
-                groups.forEach(group => {
-                    const flowList = Array.isArray(group.flowList) ? group.flowList : [];
-                    allFlows = allFlows.concat(flowList);
-                });
-                hasMore = groups.length === pageSize;
+                const items = res.content.data;
+                if (!Array.isArray(items) || items.length === 0) break;
+
+                // 兼容两种返回结构：
+                // - 分组结构（审批类 type=1 等）: [{ flowList: [...] }]
+                // - 平铺结构（集成自动化 type=5,6）: [{ processCode, name, eventType, ... }]
+                if (items[0].processCode !== undefined) {
+                    allFlows = allFlows.concat(items);
+                } else {
+                    items.forEach(group => {
+                        const flowList = Array.isArray(group.flowList) ? group.flowList : [];
+                        allFlows = allFlows.concat(flowList);
+                    });
+                }
+                hasMore = items.length === pageSize;
                 pageIndex++;
             }
 
@@ -1015,6 +1038,7 @@ export default class ProcessService {
                 // 尝试获取该流程的名称（从列表中查）和它所属的表单
                 let flowName = processCode;
                 let currentFlowFormUuid = '';
+                let currentFlowEventType = null;
                 try {
                     const allFlows = await ProcessService.getAllFlows(appId);
                     const flowItem = allFlows.find(f => f.processCode === processCode);
@@ -1028,6 +1052,7 @@ export default class ProcessService {
                             }
                         }
                         if (flowItem.formUuid) currentFlowFormUuid = flowItem.formUuid;
+                        if (flowItem.eventType != null) currentFlowEventType = flowItem.eventType;
                     }
                 } catch (e) { }
 
@@ -1045,7 +1070,8 @@ export default class ProcessService {
                             appName,
                             appMacroName,
                             formUuid: currentFlowFormUuid,
-                            formName: flowFormName
+                            formName: flowFormName,
+                            eventType: currentFlowEventType
                         },
                         exportedAt: new Date().toISOString()
                     }

@@ -2,13 +2,15 @@ import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
 import AssociationFormFix from './components/AssociationFormFix.jsx';
 import FlowFix from './components/FlowFix.jsx';
+import CustomButtonSupplement from './components/CustomButtonSupplement.jsx';
 // import FlowFix from './components/FlowFixV2.jsx';
 
 
 
 const TABS = [
     { key: 'association', label: '关联组件修复' },
-    { key: 'flow', label: '集成自动化修复' }
+    { key: 'flow', label: '集成自动化修复' },
+    { key: 'customButton', label: '自定义按钮补充' }
 ];
 
 export default function DependenceFix() {
@@ -68,6 +70,7 @@ export default function DependenceFix() {
                         <div style={{ padding: '24px', fontSize: '14px', color: '#333', flex: 1, overflow: 'auto', minHeight: '300px' }}>
                             {activeTab === 'association' && <AssociationFormFix />}
                             {activeTab === 'flow' && <FlowFix />}
+                            {activeTab === 'customButton' && <CustomButtonSupplement />}
                         </div>
 
                         <div style={{ padding: '16px 24px', borderTop: '1px solid #ebebeb', display: 'flex', justifyContent: 'flex-end', gap: '12px', background: '#fafafa' }}>

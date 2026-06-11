@@ -47,6 +47,15 @@ const getFlowDisplayName = (flow, fallback = '') => {
     return firstText(flow.title || flow.name) || flow.__customProcessName || flow.processCode || fallback;
 };
 
+const EVENT_TYPE_MAP = {
+    1: '1:表单事件触发',
+    3: '3:定时触发',
+    5: '5:集成自动化（旧）',
+    6: '6:手动触发（自定义按钮）',
+};
+
+const getEventTypeName = (eventType) => EVENT_TYPE_MAP[eventType] || `未知(${eventType})`;
+
 const buildImportResultItem = (item, index, status, extra = {}) => ({
     index,
     status,
@@ -108,7 +117,8 @@ const LogicFlowImportPanel = () => {
             const name = String(getFlowDisplayName(flow, '')).toLowerCase();
             const processCode = String(flow && flow.processCode ? flow.processCode : '').toLowerCase();
             const formName = String(flow && flow.formName ? flow.formName : '').toLowerCase();
-            return name.includes(key) || processCode.includes(key) || formName.includes(key);
+            const eventTypeName = getEventTypeName(flow?.eventType).toLowerCase();
+            return name.includes(key) || processCode.includes(key) || formName.includes(key) || eventTypeName.includes(key);
         });
     }, [flows, searchKeyword]);
 
@@ -522,6 +532,8 @@ const LogicFlowImportPanel = () => {
                                     const code = String(flow && flow.processCode ? flow.processCode : '');
                                     const key = code || `flow-${idx}`;
                                     const checked = selectedCodes.includes(code);
+                                    const eventType = flow?.eventType;
+                                    const eventTypeName = eventType != null ? getEventTypeName(eventType) : '';
                                     return (
                                         <label
                                             key={key}
@@ -535,10 +547,15 @@ const LogicFlowImportPanel = () => {
                                             }}
                                         >
                                             <input type="checkbox" checked={checked} onChange={() => toggleCode(code)} />
-                                            <span style={{ fontSize: '12px', color: '#222' }}>
+                                            <span style={{ flex: 1, fontSize: '12px', color: '#222', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                 {getFlowDisplayName(flow, '(未命名流程)')}
                                             </span>
-                                            <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#999' }}>{code}</span>
+                                            {eventType != null && (
+                                                <span style={{ fontSize: '11px', color: '#722ed1', whiteSpace: 'nowrap' }}>
+                                                    {eventTypeName}
+                                                </span>
+                                            )}
+                                            <span style={{ fontSize: '11px', color: '#999', whiteSpace: 'nowrap' }}>{code}</span>
                                         </label>
                                     );
                                 })
